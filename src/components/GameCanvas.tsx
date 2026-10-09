@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { GameEngine } from "../game/core/GameEngine";
-import { GameConfig, GameOverResult, HudState } from "../game/types/gameConfig";
+import type { GameConfig, GameOverResult, HudState } from "../game/types/gameConfig";
 
 interface GameCanvasProps {
     config: GameConfig;
@@ -35,7 +35,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             engine.destroy();
             engineRef.current = null;
         };
-    }, []);
+    }, [config, onGameOver, onHudUpdate]);
 
     useEffect(() => {
         if (engineRef.current) {
