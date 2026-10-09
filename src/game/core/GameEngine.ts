@@ -1,5 +1,5 @@
-import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
-import { GameConfig, GameOverResult, HudState } from "../types/gameConfig";
+import { Application, Container, Graphics } from "pixi.js";
+import type { GameConfig, GameOverResult, HudState } from "../types/gameConfig";
 import { InputManager } from "../systems/InputManager";
 
 export interface GameEngineOptions {
@@ -17,8 +17,8 @@ export class GameEngine {
     private onHudUpdate: (hud: HudState) => void;
 
     public readonly input: InputManager;
-    private isRunning: false;
-    private isPaused: false;
+    private isRunning: boolean = false;
+    private isPaused: boolean = false;
 
     // Dimensões da arena
     public static readonly WORLD_WIDTH = 1280;
@@ -77,9 +77,8 @@ export class GameEngine {
         window.addEventListener('resize', this.handleResize);
 
         // Inicia Game Loop via Pixi Tracker
-        this.app.ticker.add(this.onHudUpdate, this);
         this.isRunning = true;
-
+              this.app.ticker.add(this.update, this);
         // Dispara o estado inicial do HUD
         this.emitHud();
     }
@@ -143,7 +142,7 @@ export class GameEngine {
         // Sincroniza HUD a cada segundo cheio ou em mudanças
         const currentSec = Math.ceil(this.timeLeft);
         if (currentSec !== this.lasthudSecond) {
-            this.lasthudSecon = currentSec;
+            this.lasthudSecond = currentSec;
             this.emitHud();
         }
     }
@@ -169,7 +168,7 @@ export class GameEngine {
             const boundedY = Math.max(this.playerRadius, Math.min(GameEngine.WORLD_HEIGHT - this.playerRadius, nextY));
 
             // Colisão com ilhas
-            if (!this.isCollidingWithIslands(boundedX, boundedY, this.playerRadius)) {
+            if (!this.checkIslandCollision(boundedX, boundedY, this.playerRadius)) {
                 this.playerPos.x = boundedX;
                 this.playerPos.y = boundedY;
             }
@@ -198,7 +197,7 @@ export class GameEngine {
             health: this.playerHealth,
             maxHealth: this.config.playerMaxHealth,
             score: this.score,
-            timeleft: Math.ceil(this.timeLeft),
+            timeLeft: Math.ceil(this.timeLeft),
         });
     }
 

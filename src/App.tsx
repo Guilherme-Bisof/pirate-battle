@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { GameCanvas } from "./components/GameCanvas";
-import {
-  DEFAULT_CONFIG,
+import type{
   GameOverResult,
   HudState,
 } from "./game/types/gameConfig";
+
+import { DEFAULT_CONFIG } from "./game/types/gameConfig";
 
 export default function App() {
   const [hud, setHud] = useState<HudState>({
@@ -19,9 +20,9 @@ export default function App() {
   );
   const [isPaused, setIsPaused] = useState(false);
 
-  const handleGameOver = (result: GameOverResult) => {
+  const handleGameOver = useCallback((result: GameOverResult) => {
     setGameOverResult(result);
-  };
+  }, []);
 
   const handleRestart = () => {
     setGameOverResult(null);
