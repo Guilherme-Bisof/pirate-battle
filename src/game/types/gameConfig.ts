@@ -4,6 +4,8 @@ export interface GameConfig {
     playerSpeed: number;
     playerRotationSpeed: number;
     playerMaxHealth: number;
+    chaserMaxHealth: number;
+    shooterMaxHealth: number;
     frontalCooldownSec: number;
     lateralCooldownSec: number;
     projectileSpeed: number;
@@ -22,6 +24,8 @@ export const DEFAULT_CONFIG: GameConfig = {
     playerSpeed: 220,
     playerRotationSpeed: 3.0,
     playerMaxHealth: 100,
+    chaserMaxHealth: 60,
+    shooterMaxHealth: 40,
     frontalCooldownSec: 0.35,
     lateralCooldownSec: 1.2,
     projectileSpeed: 480,

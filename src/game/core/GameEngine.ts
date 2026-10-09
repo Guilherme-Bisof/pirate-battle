@@ -18,6 +18,18 @@ interface Projectile {
   remainingLife: number;
 }
 
+type EnemyKind = "CHASER" | "SHOOTER";
+
+interface Enemy {
+  kind: EnemyKind;
+  graphic: Graphics;
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  radius: number;
+}
+
 export class GameEngine {
   private app: Application;
   private container: HTMLElement;
@@ -55,6 +67,11 @@ export class GameEngine {
 
   private frontalCooldownRemaining = 0;
   private lateralCooldownRemaining = 0;
+
+  private enemies: Enemy[] = [];
+
+  private enemySpawnTimer = 0;
+  private enemySpawnCount = 0;
 
   // Ilhas (obstáculos de colisão)
   public readonly islands = [
@@ -165,6 +182,9 @@ export class GameEngine {
 
     // Processa movimento do jogador
     this.updatePlayer(dt);
+
+    this.updateEnemySpawning(dt);
+    this.updateEnemies(dt);
 
     this.updateFrontalWeapon(dt);
     this.updateLateralWeapon(dt);
@@ -303,6 +323,154 @@ export class GameEngine {
       velocityY: directionY * this.config.projectileSpeed,
       remainingLife: this.config.projectileMaxlifeSec,
     });
+  }
+
+  private updateEnemySpawning(dt: number): void {
+    this.enemySpawnTimer += dt;
+
+    if (this.enemySpawnTimer < this.config.spawnIntervalSec) {
+      return;
+    }
+
+    this.enemySpawnTimer = 0;
+    this.spawnEnemy();
+  }
+
+  private spawnEnemy(): void {
+    const kind: EnemyKind =
+      this.enemySpawnCount % 2 === 0 ? "CHASER" : "SHOOTER";
+    const radius = 20;
+
+    const spawnPoints = [
+      { x: 70, y: 70 },
+      { x: GameEngine.WORLD_WIDTH - 70, y: 70 },
+      { x: 70, y: GameEngine.WORLD_HEIGHT - 70 },
+      {
+        x: GameEngine.WORLD_WIDTH - 70,
+        y: GameEngine.WORLD_HEIGHT - 70,
+      },
+    ];
+
+    const validSpawnPoints = spawnPoints.filter((point) => {
+      const distanceToPlayer = Math.hypot(
+        point.x - this.playerPos.x,
+        point.y - this.playerPos.y,
+      );
+
+      return (
+        distanceToPlayer >= 240 &&
+        !this.checkIslandCollision(point.x, point.y, radius)
+      );
+    });
+
+    const fallbackSpawn = spawnPoints.reduce((farthest, point) => {
+      const pointDistance = Math.hypot(
+        point.x - this.playerPos.x,
+        point.y - this.playerPos.y,
+      );
+
+      const farthestDistance = Math.hypot(
+        farthest.x - this.playerPos.x,
+        farthest.y - this.playerPos.y,
+      );
+
+      return pointDistance > farthestDistance ? point : farthest;
+    });
+
+    const spawnPoint =
+      validSpawnPoints.length > 0
+        ? (validSpawnPoints[this.enemySpawnCount % validSpawnPoints.length] ??
+          fallbackSpawn)
+        : fallbackSpawn;
+
+    const maxHealth =
+      kind === "CHASER"
+        ? this.config.chaserMaxHealth
+        : this.config.shooterMaxHealth;
+
+    const graphic = new Graphics();
+
+    graphic.poly([-17, -12, 14, -12, 22, 0, 14, 12, -17, 12]);
+
+    graphic.fill({
+      color: kind === "CHASER" ? 0xc7473c : 0xe59b35,
+    });
+
+    graphic.stroke({
+      color: 0x171717,
+      width: 2,
+    });
+
+    graphic.x = spawnPoint.x;
+    graphic.y = spawnPoint.y;
+
+    this.stageContainer.addChild(graphic);
+
+    this.enemies.push({
+      kind,
+      graphic,
+      x: spawnPoint.x,
+      y: spawnPoint.y,
+      health: maxHealth,
+      maxHealth,
+      radius,
+    });
+
+    this.enemySpawnCount += 1;
+  }
+
+  private updateEnemies(dt: number): void {
+    for (const enemy of this.enemies) {
+      const dx = this.playerPos.x - enemy.x;
+      const dy = this.playerPos.y - enemy.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance === 0) {
+        continue;
+      }
+
+      enemy.graphic.rotation = Math.atan2(dy, dx);
+
+      const isChaser = enemy.kind === "CHASER";
+      const outsideAttackRange = distance > this.config.shooterAttackRange;
+
+      if (!isChaser && !outsideAttackRange) {
+        continue;
+      }
+
+      const speed = isChaser
+        ? this.config.chaserSpeed
+        : this.config.shooterSpeed;
+
+      const nextX = enemy.x + (dx / distance) * speed * dt;
+      const nextY = enemy.y + (dy / distance) * speed * dt;
+
+      const boundedX = Math.max(
+        enemy.radius,
+        Math.min(GameEngine.WORLD_WIDTH - enemy.radius, nextX),
+      );
+
+      const boundedY = Math.max(
+        enemy.radius,
+        Math.min(GameEngine.WORLD_HEIGHT - enemy.radius, nextY),
+      );
+
+      if (!this.checkIslandCollision(boundedX, boundedY, enemy.radius)) {
+        enemy.x = boundedX;
+        enemy.y = boundedY;
+      } else {
+        if (!this.checkIslandCollision(boundedX, enemy.y, enemy.radius)) {
+          enemy.x = boundedX;
+        }
+
+        if (!this.checkIslandCollision(enemy.x, boundedY, enemy.radius)) {
+          enemy.y = boundedY;
+        }
+      }
+
+      enemy.graphic.x = enemy.x;
+      enemy.graphic.y = enemy.y;
+    }
   }
 
   private updateProjectiles(dt: number): void {
