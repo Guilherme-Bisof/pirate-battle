@@ -47,6 +47,8 @@ export class GameEngine {
   private playerPos = { x: 200, y: 360, rotation: 0 };
   private playerRadius = 24;
 
+  private readonly projectileRadius = 5;
+
   // Projetéis
 
   private projectiles: Projectile[] = [];
@@ -285,7 +287,7 @@ export class GameEngine {
       this.playerPos.y + directionY * startDistance + forwardY * forwardOffset;
 
     const graphic = new Graphics();
-    graphic.circle(0, 0, 5);
+    graphic.circle(0, 0, this.projectileRadius);
     graphic.fill({ color: 0xffd166 });
 
     graphic.x = x;
@@ -324,7 +326,12 @@ export class GameEngine {
         projectile.y < 0 ||
         projectile.y > GameEngine.WORLD_HEIGHT;
 
-      if (projectile.remainingLife <= 0 || outsideArena) {
+      const hitsIsland = this.isProjectileCollindingWithIsland(
+        projectile.x,
+        projectile.y,
+      );
+
+      if (projectile.remainingLife <= 0 || outsideArena || hitsIsland) {
         this.stageContainer.removeChild(projectile.graphic);
         projectile.graphic.destroy();
         this.projectiles.splice(i, 1);
@@ -341,6 +348,21 @@ export class GameEngine {
         return true;
       }
     }
+    return false;
+  }
+
+  private isProjectileCollindingWithIsland(x: number, y: number): boolean {
+    for (const island of this.islands) {
+      const centerX = island.x + island.width / 2;
+      const centerY = island.y + island.height / 2;
+
+      const distance = Math.hypot(x - centerX, y - centerY);
+
+      if (distance <= island.radius + this.projectileRadius) {
+        return true;
+      }
+    }
+
     return false;
   }
 
