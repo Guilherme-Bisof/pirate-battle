@@ -16,6 +16,7 @@ interface Projectile {
   velocityX: number;
   velocityY: number;
   remainingLife: number;
+  owner: "PLAYER" | "ENEMY";
 }
 
 type EnemyKind = "CHASER" | "SHOOTER";
@@ -23,11 +24,14 @@ type EnemyKind = "CHASER" | "SHOOTER";
 interface Enemy {
   kind: EnemyKind;
   graphic: Graphics;
+  healthBarBackground: Graphics;
+  healthBarFill: Graphics;
   x: number;
   y: number;
   health: number;
   maxHealth: number;
   radius: number;
+  attackCooldownRemaining: number;
 }
 
 export class GameEngine {
@@ -56,6 +60,8 @@ export class GameEngine {
   // Camadas e Entidades
   private stageContainer: Container;
   private playerGraphics: Graphics;
+  private playerHealthBarBackground: Graphics;
+  private playerHealthBarFill: Graphics;
   private playerPos = { x: 200, y: 360, rotation: 0 };
   private playerRadius = 24;
 
@@ -94,6 +100,8 @@ export class GameEngine {
     this.app = new Application();
     this.stageContainer = new Container();
     this.playerGraphics = new Graphics();
+    this.playerHealthBarBackground = new Graphics();
+    this.playerHealthBarFill = new Graphics();
   }
 
   public async init(): Promise<void> {
@@ -152,6 +160,17 @@ export class GameEngine {
     // Renderiza o navio do jogador
     this.drawPlayer();
     this.stageContainer.addChild(this.playerGraphics);
+
+    this.playerHealthBarBackground.rect(-25, -38, 50, 6);
+    this.playerHealthBarBackground.fill({ color: 0x292929 });
+
+    this.playerHealthBarBackground.x = this.playerPos.x;
+    this.playerHealthBarBackground.y = this.playerPos.y;
+
+    this.updatePlayerHealthBar();
+
+    this.stageContainer.addChild(this.playerHealthBarBackground);
+    this.stageContainer.addChild(this.playerHealthBarFill);
   }
 
   private drawPlayer(): void {
@@ -239,6 +258,12 @@ export class GameEngine {
     this.playerGraphics.x = this.playerPos.x;
     this.playerGraphics.y = this.playerPos.y;
     this.playerGraphics.rotation = this.playerPos.rotation;
+
+    this.playerHealthBarBackground.x = this.playerPos.x;
+    this.playerHealthBarBackground.y = this.playerPos.y;
+
+    this.playerHealthBarFill.x = this.playerPos.x;
+    this.playerHealthBarFill.y = this.playerPos.y;
   }
 
   private updateFrontalWeapon(dt: number): void {
@@ -322,6 +347,35 @@ export class GameEngine {
       velocityX: directionX * this.config.projectileSpeed,
       velocityY: directionY * this.config.projectileSpeed,
       remainingLife: this.config.projectileMaxlifeSec,
+      owner: "PLAYER",
+    });
+  }
+
+  private spawnEnemyProjectile(enemy: Enemy, angle: number): void {
+    const directionX = Math.cos(angle);
+    const directionY = Math.sin(angle);
+    const startDistance = enemy.radius + this.projectileRadius + 2;
+
+    const x = enemy.x + directionX * startDistance;
+    const y = enemy.y + directionY * startDistance;
+
+    const graphic = new Graphics();
+    graphic.circle(0, 0, this.projectileRadius);
+    graphic.fill({ color: 0xff6b6b });
+
+    graphic.x = x;
+    graphic.y = y;
+
+    this.stageContainer.addChild(graphic);
+
+    this.projectiles.push({
+      graphic,
+      x,
+      y,
+      velocityX: directionX * this.config.projectileSpeed * 0.65,
+      velocityY: directionY * this.config.projectileSpeed * 0.65,
+      remainingLife: this.config.projectileMaxlifeSec,
+      owner: "ENEMY",
     });
   }
 
@@ -404,16 +458,35 @@ export class GameEngine {
     graphic.x = spawnPoint.x;
     graphic.y = spawnPoint.y;
 
+    const healthBarBackground = new Graphics();
+    healthBarBackground.rect(-20, -28, 40, 5);
+    healthBarBackground.fill({ color: 0x292929 });
+
+    const healthBarFill = new Graphics();
+    healthBarFill.rect(-20, -28, 40, 5);
+    healthBarFill.fill({ color: 0x45d483 });
+
+    healthBarBackground.x = spawnPoint.x;
+    healthBarBackground.y = spawnPoint.y;
+
+    healthBarFill.x = spawnPoint.x;
+    healthBarFill.y = spawnPoint.y;
+
+    this.stageContainer.addChild(healthBarBackground);
+    this.stageContainer.addChild(healthBarFill);
     this.stageContainer.addChild(graphic);
 
     this.enemies.push({
       kind,
       graphic,
+      healthBarBackground,
+      healthBarFill,
       x: spawnPoint.x,
       y: spawnPoint.y,
       health: maxHealth,
       maxHealth,
       radius,
+      attackCooldownRemaining: 0,
     });
 
     this.enemySpawnCount += 1;
@@ -421,6 +494,11 @@ export class GameEngine {
 
   private updateEnemies(dt: number): void {
     for (const enemy of this.enemies) {
+      enemy.attackCooldownRemaining = Math.max(
+        0,
+        enemy.attackCooldownRemaining - dt,
+      );
+
       const dx = this.playerPos.x - enemy.x;
       const dy = this.playerPos.y - enemy.y;
       const distance = Math.hypot(dx, dy);
@@ -429,12 +507,27 @@ export class GameEngine {
         continue;
       }
 
-      enemy.graphic.rotation = Math.atan2(dy, dx);
+      const angle = Math.atan2(dy, dx);
+      enemy.graphic.rotation = angle;
 
       const isChaser = enemy.kind === "CHASER";
       const outsideAttackRange = distance > this.config.shooterAttackRange;
 
       if (!isChaser && !outsideAttackRange) {
+        if (enemy.attackCooldownRemaining <= 0) {
+          this.spawnEnemyProjectile(enemy, angle);
+          enemy.attackCooldownRemaining = this.config.shooterCooldownSec;
+        }
+
+        continue;
+      }
+
+      if (isChaser && distance <= enemy.radius + this.playerRadius) {
+        if (enemy.attackCooldownRemaining <= 0) {
+          this.damagePlayer(this.config.chaserDamage);
+          enemy.attackCooldownRemaining = 1;
+        }
+
         continue;
       }
 
@@ -470,7 +563,26 @@ export class GameEngine {
 
       enemy.graphic.x = enemy.x;
       enemy.graphic.y = enemy.y;
+
+      enemy.healthBarBackground.x = enemy.x;
+      enemy.healthBarBackground.y = enemy.y;
+
+      enemy.healthBarFill.x = enemy.x;
+      enemy.healthBarFill.y = enemy.y;
     }
+  }
+
+  private updateEnemyHealthbar(enemy: Enemy): void {
+    const healthRatio = Math.max(
+      0,
+      Math.min(1, enemy.health / enemy.maxHealth),
+    );
+
+    enemy.healthBarFill.clear();
+    enemy.healthBarFill.rect(-20, -28, 40 * healthRatio, 5);
+    enemy.healthBarFill.fill({
+      color: healthRatio <= 0.3 ? 0xe74c3c : 0x45d483,
+    });
   }
 
   private updateProjectiles(dt: number): void {
@@ -500,18 +612,35 @@ export class GameEngine {
       );
 
       const hitsEnemyIndex =
-        !outsideArena && !hitsIsland
+        projectile.owner === "PLAYER" && !outsideArena && !hitsIsland
           ? this.findCollidingEnemyIndex(projectile.x, projectile.y)
           : -1;
 
-      if (hitsEnemyIndex !== 1) {
+      const hitsPlayer =
+        projectile.owner === "ENEMY" &&
+        !outsideArena &&
+        !hitsIsland &&
+        Math.hypot(
+          projectile.x - this.playerPos.x,
+          projectile.y - this.playerPos.y,
+        ) <=
+          this.playerRadius + this.projectileRadius;
+
+      if (hitsEnemyIndex !== -1) {
         const enemy = this.enemies[hitsEnemyIndex];
 
         if (enemy) {
           enemy.health -= this.config.projectDamage;
 
+          this.updateEnemyHealthbar(enemy);
+
           if (enemy.health <= 0) {
+            this.stageContainer.removeChild(enemy.healthBarBackground);
+            this.stageContainer.removeChild(enemy.healthBarFill);
             this.stageContainer.removeChild(enemy.graphic);
+
+            enemy.healthBarBackground.destroy();
+            enemy.healthBarFill.destroy();
             enemy.graphic.destroy();
 
             this.enemies.splice(hitsEnemyIndex, 1);
@@ -522,7 +651,17 @@ export class GameEngine {
         }
       }
 
-      if (projectile.remainingLife <= 0 || outsideArena || hitsIsland || hitsEnemyIndex !== -1) {
+      if (hitsPlayer) {
+        this.damagePlayer(this.config.shooterDamage);
+      }
+
+      if (
+        projectile.remainingLife <= 0 ||
+        outsideArena ||
+        hitsIsland ||
+        hitsEnemyIndex !== -1 ||
+        hitsPlayer
+      ) {
         this.stageContainer.removeChild(projectile.graphic);
         projectile.graphic.destroy();
         this.projectiles.splice(i, 1);
@@ -562,6 +701,34 @@ export class GameEngine {
       const distance = Math.hypot(x - enemy.x, y - enemy.y);
 
       return distance <= enemy.radius + this.projectileRadius;
+    });
+  }
+
+  private damagePlayer(amount: number): void {
+    if (!this.isRunning || amount <= 0) {
+      return;
+    }
+
+    this.playerHealth = Math.max(0, this.playerHealth - amount);
+
+    this.updatePlayerHealthBar();
+    this.emitHud();
+
+    if (this.playerHealth <= 0) {
+      this.endGame("DIED");
+    }
+  }
+
+  private updatePlayerHealthBar(): void {
+    const healthRatio = Math.max(
+      0,
+      Math.min(1, this.playerHealth / this.config.playerMaxHealth),
+    );
+
+    this.playerHealthBarFill.clear();
+    this.playerHealthBarFill.rect(-25, -38, 50 * healthRatio, 6);
+    this.playerHealthBarFill.fill({
+      color: healthRatio <= 0.3 ? 0xe74c3c : 0x45d483,
     });
   }
 
