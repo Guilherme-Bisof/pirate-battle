@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { GameCanvas } from "./components/GameCanvas";
 import type {
   GameConfig,
@@ -8,6 +8,10 @@ import type {
 import { MainMenu } from "./components/screens/MainMenu";
 import { OptionsModal } from "./components/screens/OptionsModal";
 import { DEFAULT_CONFIG } from "./game/types/gameConfig";
+import { RankingTab } from "./components/screens/RankingTab";
+import { MatchHistoryTab } from "./components/screens/MatchHistoryTab";
+import type { MatchRecordInput } from "./api/types";
+import { useRegisterMatch } from "./hooks/useMatchHistory";
 
 const OPTIONS_STORAGE_KEY = "pirate-battle-options";
 
@@ -55,15 +59,73 @@ function loadSavedOptions(): SavedOptions {
   }
 }
 
-export default function App() {
-  const [screen, setScreen] = useState<"menu" | "options" | "game">("menu");
+const PENDING_MATCHES_KEY = "pirate-battle-pending-matches";
 
-  const [config, setConfig] =
-    useState <
-    GameConfig>(() => ({
-      ...DEFAULT_CONFIG,
-      ...loadSavedOptions(),
-    }));
+function readPendingMatches(): MatchRecordInput[] {
+  try {
+    const serialized = localStorage.getItem(PENDING_MATCHES_KEY);
+
+    if (!serialized) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(serialized);
+
+    return Array.isArray(parsed) ? (parsed as MatchRecordInput[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingMatch(match: MatchRecordInput): void {
+  try {
+    const pending = readPendingMatches();
+
+    if (!pending.some((item) => item.matchId === match.matchId)) {
+      localStorage.setItem(
+        PENDING_MATCHES_KEY,
+        JSON.stringify([...pending, match]),
+      );
+    }
+  } catch {
+    console.error("Unable to persist the pending match.");
+  }
+}
+
+function removePendingMatch(matchId: string): void {
+  try {
+    const pending = readPendingMatches().filter(
+      (match) => match.matchId !== matchId,
+    );
+
+    localStorage.setItem(PENDING_MATCHES_KEY, JSON.stringify(pending));
+  } catch {
+    console.error("Unable to update pending matches.");
+  }
+}
+
+export default function App() {
+  const [screen, setScreen] = useState<
+    "menu" | "options" | "game" | "ranking" | "history"
+  >("menu");
+
+  const [config, setConfig] = useState<GameConfig>(() => ({
+    ...DEFAULT_CONFIG,
+    ...loadSavedOptions(),
+  }));
+
+  const {
+    mutateAsync: submitMatch,
+    isPending: isRegisteringMatch,
+    isError: isRegistrationError,
+    isSuccess: isRegistrationSuccess,
+    reset: resetMatchRegistration,
+  } = useRegisterMatch();
+
+  const currentMatchIdRef = useRef<string | null>(null);
+
+  const [completedMatchRecord, setCompletedMatchRecord] =
+    useState<MatchRecordInput | null>(null);
 
   const [gameSessionId, setGameSessionId] = useState(0);
 
@@ -79,9 +141,50 @@ export default function App() {
   );
   const [isPaused, setIsPaused] = useState(false);
 
-  const handleGameOver = useCallback((result: GameOverResult) => {
-    setGameOverResult(result);
-  }, []);
+  const handleGameOver = useCallback(
+    (result: GameOverResult) => {
+      const match: MatchRecordInput = {
+        matchId: currentMatchIdRef.current ?? crypto.randomUUID(),
+        playerId: "local-player",
+        playerName: "You",
+        playedAt: new Date().toISOString(),
+        score: result.score,
+        duration: result.duration,
+        reason: result.reason,
+        config: result.config,
+      };
+
+      currentMatchIdRef.current = match.matchId;
+
+      setGameOverResult(result);
+      setCompletedMatchRecord(match);
+
+      savePendingMatch(match);
+
+      void submitMatch(match)
+        .then(() => {
+          removePendingMatch(match.matchId);
+        })
+        .catch(() => {
+          // Keep the match in local storage for retry.
+        });
+    },
+    [submitMatch],
+  );
+
+  useEffect(() => {
+    const pendingMatches = readPendingMatches();
+
+    for (const match of pendingMatches) {
+      void submitMatch(match)
+        .then(() => {
+          removePendingMatch(match.matchId);
+        })
+        .catch(() => {
+          // Keep failed records for a future retry.
+        });
+    }
+  }, [submitMatch]);
 
   function startGame() {
     setGameOverResult(null);
@@ -94,6 +197,8 @@ export default function App() {
       timeLeft: config.sessionDurationSec,
     });
 
+    currentMatchIdRef.current = crypto.randomUUID();
+    resetMatchRegistration();
     setGameSessionId((current) => current + 1);
     setScreen("game");
   }
@@ -124,12 +229,14 @@ export default function App() {
       <MainMenu
         onPlay={startGame}
         onOptions={() => setScreen("options")}
+        onRanking={() => setScreen("ranking")}
+        onMatchHistory={() => setScreen("history")}
       />
     );
   }
 
   if (screen === "options") {
-    return(
+    return (
       <OptionsModal
         sessionDurationSec={config.sessionDurationSec}
         spawnIntervalSec={config.spawnIntervalSec}
@@ -137,6 +244,14 @@ export default function App() {
         onClose={() => setScreen("menu")}
       />
     );
+  }
+
+  if (screen === "ranking") {
+    return <RankingTab config={config} onClose={returnToMenu} />;
+  }
+
+  if (screen === "history") {
+    return <MatchHistoryTab playerId="local-player" onClose={returnToMenu} />;
   }
 
   return (
@@ -206,6 +321,48 @@ export default function App() {
                 {gameOverResult.score}
               </span>
             </p>
+
+            {isRegisteringMatch && (
+              <p role="status" className="mb-4 text-sm text-amber-300">
+                Saving match record...
+              </p>
+            )}
+
+            {isRegistrationSuccess && (
+              <p role="status" className="mb-4 text-sm text-emerald-300">
+                Match record saved successfully.
+              </p>
+            )}
+
+            {isRegistrationError && completedMatchRecord && (
+              <div
+                role="alert"
+                className="mb-4 rounded-lg border border-red-800 p-3 text-sm"
+              >
+                <p className="text-red-300">
+                  The match could not be registered. It remains pending on this
+                  device.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetMatchRegistration();
+
+                    void submitMatch(completedMatchRecord)
+                      .then(() => {
+                        removePendingMatch(completedMatchRecord.matchId);
+                      })
+                      .catch(() => {
+                        // Preserve the pending record.
+                      });
+                  }}
+                  className="mt-3 rounded border border-red-700 px-3 py-2 hover:bg-red-950"
+                >
+                  Retry Registration
+                </button>
+              </div>
+            )}
             <button
               onClick={startGame}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition"

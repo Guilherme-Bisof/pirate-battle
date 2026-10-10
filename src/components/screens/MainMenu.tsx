@@ -1,9 +1,16 @@
 interface MainMenuProps {
   onPlay: () => void;
   onOptions: () => void;
+  onRanking: () => void;
+  onMatchHistory: () => void;
 }
 
-export function MainMenu({ onPlay, onOptions }: MainMenuProps) {
+export function MainMenu({
+  onPlay,
+  onOptions,
+  onRanking,
+  onMatchHistory,
+}: MainMenuProps) {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-6">
       <section
@@ -33,6 +40,22 @@ export function MainMenu({ onPlay, onOptions }: MainMenuProps) {
             className="w-full rounded-lg border border-slate-600 px-6 py-3 font-bold hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
             Options
+          </button>
+
+          <button
+            type="button"
+            onClick={onRanking}
+            className="w-full rounded-lg border border-slate-600 px-6 py-3 font-bold hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            Ranking
+          </button>
+
+          <button
+            type="button"
+            onClick={onMatchHistory}
+            className="w-full rounded-lg border border-slate-600 px-6 py-3 font-bold hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            Match History
           </button>
         </div>
 
