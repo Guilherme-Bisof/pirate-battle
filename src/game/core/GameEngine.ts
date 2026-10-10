@@ -499,7 +499,30 @@ export class GameEngine {
         projectile.y,
       );
 
-      if (projectile.remainingLife <= 0 || outsideArena || hitsIsland) {
+      const hitsEnemyIndex =
+        !outsideArena && !hitsIsland
+          ? this.findCollidingEnemyIndex(projectile.x, projectile.y)
+          : -1;
+
+      if (hitsEnemyIndex !== 1) {
+        const enemy = this.enemies[hitsEnemyIndex];
+
+        if (enemy) {
+          enemy.health -= this.config.projectDamage;
+
+          if (enemy.health <= 0) {
+            this.stageContainer.removeChild(enemy.graphic);
+            enemy.graphic.destroy();
+
+            this.enemies.splice(hitsEnemyIndex, 1);
+
+            this.score += 1;
+            this.emitHud();
+          }
+        }
+      }
+
+      if (projectile.remainingLife <= 0 || outsideArena || hitsIsland || hitsEnemyIndex !== -1) {
         this.stageContainer.removeChild(projectile.graphic);
         projectile.graphic.destroy();
         this.projectiles.splice(i, 1);
@@ -532,6 +555,14 @@ export class GameEngine {
     }
 
     return false;
+  }
+
+  private findCollidingEnemyIndex(x: number, y: number): number {
+    return this.enemies.findIndex((enemy) => {
+      const distance = Math.hypot(x - enemy.x, y - enemy.y);
+
+      return distance <= enemy.radius + this.projectileRadius;
+    });
   }
 
   private emitHud(): void {

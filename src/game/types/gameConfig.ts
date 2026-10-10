@@ -9,6 +9,7 @@ export interface GameConfig {
     frontalCooldownSec: number;
     lateralCooldownSec: number;
     projectileSpeed: number;
+    projectDamage: number;
     projectileMaxlifeSec: number;
     chaserSpeed: number;
     chaserDamage: number;
@@ -29,6 +30,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     frontalCooldownSec: 0.35,
     lateralCooldownSec: 1.2,
     projectileSpeed: 480,
+    projectDamage: 25,
     projectileMaxlifeSec: 1.8,
     chaserSpeed: 160,
     chaserDamage: 30,
