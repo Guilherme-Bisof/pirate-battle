@@ -1,47 +1,65 @@
 import React, { useEffect, useRef } from "react";
 import { GameEngine } from "../game/core/GameEngine";
-import type { GameConfig, GameOverResult, HudState } from "../game/types/gameConfig";
+import type {
+  GameConfig,
+  GameOverResult,
+  HudState,
+} from "../game/types/gameConfig";
+import { TouchControls } from "./hud/TouchControls";
 
 interface GameCanvasProps {
-    config: GameConfig;
-    isPaused: boolean;
-    onGameOver: (result: GameOverResult) => void;
-    onHudUpdate: (hud: HudState) => void;
+  config: GameConfig;
+  isPaused: boolean;
+  onGameOver: (result: GameOverResult) => void;
+  onHudUpdate: (hud: HudState) => void;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
-    config,
-    isPaused,
-    onGameOver,
-    onHudUpdate,
+  config,
+  isPaused,
+  onGameOver,
+  onHudUpdate,
 }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const engineRef = useRef<GameEngine | null> (null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<GameEngine | null>(null);
 
-    useEffect(() => {
-        if (!containerRef.current) return;
-        
-        const engine = new GameEngine({
-            container: containerRef.current,
-            config,
-            onGameOver,
-            onHudUpdate,
-        });
+  useEffect(() => {
+    if (!containerRef.current) return;
 
-        engineRef.current = engine;
-        engine.init();
+    const engine = new GameEngine({
+      container: containerRef.current,
+      config,
+      onGameOver,
+      onHudUpdate,
+    });
 
-        return () => {
-            engine.destroy();
-            engineRef.current = null;
-        };
-    }, [config, onGameOver, onHudUpdate]);
+    engineRef.current = engine;
+    engine.init();
 
-    useEffect(() => {
-        if (engineRef.current) {
-            engineRef.current.setPaused(isPaused);
-        }
-    }, [isPaused]);
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
+    };
+  }, [config, onGameOver, onHudUpdate]);
 
-    return <div ref={containerRef} className="w-full h-full relative overflow-hidden select-none" />;
-}
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setPaused(isPaused);
+    }
+  }, [isPaused]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full relative overflow-hidden select-none"
+    >
+      {!isPaused && (
+        <TouchControls
+          onInputChange={(key, pressed) => {
+            engineRef.current?.input.setVirtualInput(key, pressed);
+          }}
+        />
+      )}
+    </div>
+  );
+};

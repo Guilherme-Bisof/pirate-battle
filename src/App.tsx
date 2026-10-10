@@ -141,6 +141,28 @@ export default function App() {
   );
   const [isPaused, setIsPaused] = useState(false);
 
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      setIsPaused(true);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsPaused(true);
+      }
+    };
+
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener(
+        "visibilitychange", handleVisibilityChange,
+      );
+    };
+  }, []);
+
   const handleGameOver = useCallback(
     (result: GameOverResult) => {
       const match: MatchRecordInput = {
@@ -283,7 +305,7 @@ export default function App() {
       </header>
 
       {/* Instruções de Controle */}
-      <footer className="absolute bottom-4 left-4 z-10 px-4 py-2 bg-slate-900/80 backdrop-blur border border-slate-700 rounded text-xs text-slate-300 font-mono pointer-events-none">
+      <footer className="hidden sm:block absolute bottom-4 left-4 z-10 px-4 py-2 bg-slate-900/80 backdrop-blur border border-slate-700 rounded text-xs text-slate-300 font-mono pointer-events-none">
         <p>
           Movement: <span className="text-amber-400">W / Seta Cima</span>
         </p>

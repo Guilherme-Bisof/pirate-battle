@@ -1,4 +1,7 @@
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Container, Graphics, Sprite } from "pixi.js";
+import { loadGameAssets } from "./GameAssets";
+import type { GameAssets } from "./GameAssets";
+import { GameAudio } from "./GameAudio";
 import type { GameConfig, GameOverResult, HudState } from "../types/gameConfig";
 import { InputManager } from "../systems/InputManager";
 
@@ -10,7 +13,7 @@ export interface GameEngineOptions {
 }
 
 interface Projectile {
-  graphic: Graphics;
+  graphic: Sprite;
   x: number;
   y: number;
   velocityX: number;
@@ -23,7 +26,7 @@ type EnemyKind = "CHASER" | "SHOOTER";
 
 interface Enemy {
   kind: EnemyKind;
-  graphic: Graphics;
+  graphic: Sprite;
   healthBarBackground: Graphics;
   healthBarFill: Graphics;
   x: number;
@@ -34,8 +37,14 @@ interface Enemy {
   attackCooldownRemaining: number;
 }
 
+interface ExplosionEffect {
+  graphic: Sprite;
+  elapsed: number;
+}
+
 export class GameEngine {
   private app: Application;
+  private readonly audio = new GameAudio();
   private container: HTMLElement;
   private config: GameConfig;
   private onGameOver: (result: GameOverResult) => void;
@@ -59,7 +68,8 @@ export class GameEngine {
 
   // Camadas e Entidades
   private stageContainer: Container;
-  private playerGraphics: Graphics;
+  private playerGraphics: Sprite;
+  private assets: GameAssets | null = null;
   private playerHealthBarBackground: Graphics;
   private playerHealthBarFill: Graphics;
   private playerPos = { x: 200, y: 360, rotation: 0 };
@@ -75,6 +85,7 @@ export class GameEngine {
   private lateralCooldownRemaining = 0;
 
   private enemies: Enemy[] = [];
+  private explosions: ExplosionEffect[] = [];
 
   private enemySpawnTimer = 0;
   private enemySpawnCount = 0;
@@ -99,7 +110,7 @@ export class GameEngine {
     this.input = new InputManager();
     this.app = new Application();
     this.stageContainer = new Container();
-    this.playerGraphics = new Graphics();
+    this.playerGraphics = new Sprite();
     this.playerHealthBarBackground = new Graphics();
     this.playerHealthBarFill = new Graphics();
   }
@@ -112,6 +123,13 @@ export class GameEngine {
       autoDensity: true,
       antialias: true,
     });
+
+    if (this.isDestroyed) {
+      this.app.destroy({ removeView: true }, { children: true });
+      return;
+    }
+
+    this.assets = await loadGameAssets();
 
     if (this.isDestroyed) {
       this.app.destroy({ removeView: true }, { children: true });
@@ -132,6 +150,7 @@ export class GameEngine {
     // Inicia Game Loop via Pixi Tracker
     this.isRunning = true;
     this.app.ticker.add(this.update, this);
+    this.audio.play("gameStart");
 
     // Dispara o estado inicial do HUD
     this.emitHud();
@@ -174,15 +193,12 @@ export class GameEngine {
   }
 
   private drawPlayer(): void {
-    this.playerGraphics.clear();
-    // Casco
-    this.playerGraphics.poly([-20, -14, 16, -14, 28, 0, 16, 14, -20, 14]);
-    this.playerGraphics.fill({ color: 0x8b5a2b });
-    this.playerGraphics.stroke({ color: 0xffd700, width: 2 });
+    if (!this.assets) return;
 
-    // Vela
-    this.playerGraphics.rect(-4, -12, 8, 24);
-    this.playerGraphics.fill({ color: 0xf5f5f5 });
+    this.playerGraphics.texture = this.assets.playerShip;
+    this.playerGraphics.anchor.set(0.5);
+    this.playerGraphics.width = 34;
+    this.playerGraphics.height = 50;
   }
 
   private update(): void {
@@ -208,6 +224,8 @@ export class GameEngine {
     this.updateFrontalWeapon(dt);
     this.updateLateralWeapon(dt);
     this.updateProjectiles(dt);
+
+    this.updateExplosion(dt);
 
     // Sincroniza HUD a cada segundo cheio ou em mudanças
     const currentSec = Math.ceil(this.timeLeft);
@@ -257,7 +275,7 @@ export class GameEngine {
     // Sincroniza o sprite
     this.playerGraphics.x = this.playerPos.x;
     this.playerGraphics.y = this.playerPos.y;
-    this.playerGraphics.rotation = this.playerPos.rotation;
+    this.playerGraphics.rotation = this.playerPos.rotation + Math.PI / 2;
 
     this.playerHealthBarBackground.x = this.playerPos.x;
     this.playerHealthBarBackground.y = this.playerPos.y;
@@ -279,6 +297,7 @@ export class GameEngine {
     }
 
     this.spawnProjectile(this.playerPos.rotation);
+    this.audio.play("playerFire");
     this.frontalCooldownRemaining = this.config.frontalCooldownSec;
   }
 
@@ -297,6 +316,7 @@ export class GameEngine {
       return;
     }
 
+    this.audio.play("broadside");
     if (input.fireLeft) {
       this.spawnBroadside(-1);
     }
@@ -331,9 +351,11 @@ export class GameEngine {
     const y =
       this.playerPos.y + directionY * startDistance + forwardY * forwardOffset;
 
-    const graphic = new Graphics();
-    graphic.circle(0, 0, this.projectileRadius);
-    graphic.fill({ color: 0xffd166 });
+    if (!this.assets) return;
+    const graphic = new Sprite(this.assets.cannonBall);
+    graphic.anchor.set(0.5);
+    graphic.width = 10;
+    graphic.height = 10;
 
     graphic.x = x;
     graphic.y = y;
@@ -359,9 +381,12 @@ export class GameEngine {
     const x = enemy.x + directionX * startDistance;
     const y = enemy.y + directionY * startDistance;
 
-    const graphic = new Graphics();
-    graphic.circle(0, 0, this.projectileRadius);
-    graphic.fill({ color: 0xff6b6b });
+    if (!this.assets) return;
+
+    const graphic = new Sprite(this.assets.cannonBall);
+    graphic.anchor.set(0.5);
+    graphic.width = 10;
+    graphic.height = 10;
 
     graphic.x = x;
     graphic.y = y;
@@ -442,18 +467,15 @@ export class GameEngine {
         ? this.config.chaserMaxHealth
         : this.config.shooterMaxHealth;
 
-    const graphic = new Graphics();
+    if (!this.assets) return;
 
-    graphic.poly([-17, -12, 14, -12, 22, 0, 14, 12, -17, 12]);
+    const texture =
+      kind === "CHASER" ? this.assets.chaserShip : this.assets.shooterShip;
 
-    graphic.fill({
-      color: kind === "CHASER" ? 0xc7473c : 0xe59b35,
-    });
-
-    graphic.stroke({
-      color: 0x171717,
-      width: 2,
-    });
+    const graphic = new Sprite(texture);
+    graphic.anchor.set(0.5);
+    graphic.width = 30;
+    graphic.height = 52;
 
     graphic.x = spawnPoint.x;
     graphic.y = spawnPoint.y;
@@ -507,15 +529,16 @@ export class GameEngine {
         continue;
       }
 
-      const angle = Math.atan2(dy, dx);
-      enemy.graphic.rotation = angle;
+      const angleToPlayer = Math.atan2(dy, dx);
+      enemy.graphic.rotation = angleToPlayer + Math.PI / 2;
 
       const isChaser = enemy.kind === "CHASER";
       const outsideAttackRange = distance > this.config.shooterAttackRange;
 
       if (!isChaser && !outsideAttackRange) {
         if (enemy.attackCooldownRemaining <= 0) {
-          this.spawnEnemyProjectile(enemy, angle);
+          this.spawnEnemyProjectile(enemy, angleToPlayer);
+          this.audio.play("enemyFire");
           enemy.attackCooldownRemaining = this.config.shooterCooldownSec;
         }
 
@@ -585,6 +608,66 @@ export class GameEngine {
     });
   }
 
+  private spawnExplosion(x: number, y: number): void {
+    if (!this.assets || this.assets.explosions.length === 0) {
+      return;
+    }
+
+    const firstFrame = this.assets.explosions[0];
+
+    if (!firstFrame) {
+      return;
+    }
+
+    const graphic = new Sprite(firstFrame);
+
+    graphic.anchor.set(0.5);
+    graphic.width = 58;
+    graphic.height = 58;
+    graphic.x = x;
+    graphic.y = y;
+
+    this.stageContainer.addChild(graphic);
+
+    this.explosions.push({
+      graphic,
+      elapsed: 0,
+    });
+
+    this.audio.play("explosion");
+  }
+
+  private updateExplosion(dt: number): void {
+    if (!this.assets) {
+      return;
+    }
+
+    const frameDuration = 0.09;
+
+    for (let i = this.explosions.length - 1; i >= 0; i--) {
+      const effect = this.explosions[i];
+
+      if (!effect) {
+        continue;
+      }
+
+      effect.elapsed += dt;
+
+      const frameIndex = Math.floor(effect.elapsed / frameDuration);
+
+      const texture = this.assets.explosions[frameIndex];
+
+      if (!texture) {
+        this.stageContainer.removeChild(effect.graphic);
+        effect.graphic.destroy();
+        this.explosions.splice(i, 1);
+        continue;
+      }
+
+      effect.graphic.texture = texture;
+    }
+  }
+
   private updateProjectiles(dt: number): void {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const projectile = this.projectiles[i];
@@ -635,6 +718,8 @@ export class GameEngine {
           this.updateEnemyHealthbar(enemy);
 
           if (enemy.health <= 0) {
+            this.spawnExplosion(enemy.x, enemy.y);
+
             this.stageContainer.removeChild(enemy.healthBarBackground);
             this.stageContainer.removeChild(enemy.healthBarFill);
             this.stageContainer.removeChild(enemy.graphic);
@@ -646,6 +731,7 @@ export class GameEngine {
             this.enemies.splice(hitsEnemyIndex, 1);
 
             this.score += 1;
+            this.audio.play("score");
             this.emitHud();
           }
         }
@@ -655,13 +741,23 @@ export class GameEngine {
         this.damagePlayer(this.config.shooterDamage);
       }
 
-      if (
+      const projectileMissed =
+        (projectile.remainingLife <= 0 || outsideArena) &&
+        !hitsIsland &&
+        hitsEnemyIndex === -1 &&
+        !hitsPlayer;
+      if (projectileMissed) {
+        this.audio.play("waterHit");
+      }
+
+      const shouldRemoveProjectile =
         projectile.remainingLife <= 0 ||
         outsideArena ||
         hitsIsland ||
         hitsEnemyIndex !== -1 ||
-        hitsPlayer
-      ) {
+        hitsPlayer;
+
+      if (shouldRemoveProjectile) {
         this.stageContainer.removeChild(projectile.graphic);
         projectile.graphic.destroy();
         this.projectiles.splice(i, 1);
@@ -709,6 +805,8 @@ export class GameEngine {
       return;
     }
 
+    this.audio.play("shipHit");
+
     this.playerHealth = Math.max(0, this.playerHealth - amount);
 
     this.updatePlayerHealthBar();
@@ -743,6 +841,9 @@ export class GameEngine {
 
   private endGame(reason: "TIMEOUT" | "DIED"): void {
     this.isRunning = false;
+
+    this.audio.play(reason === "TIMEOUT" ? "gameComplete" : "gameOver");
+
     this.input.reset();
     this.onGameOver({
       score: this.score,
@@ -755,9 +856,17 @@ export class GameEngine {
   }
 
   public setPaused(paused: boolean): void {
+    if (this.isPaused === paused) {
+      return;
+    }
+
     this.isPaused = paused;
+
     if (paused) {
       this.input.reset();
+      this.audio.play("pause");
+    } else if (this.isRunning) {
+      this.audio.play("resume");
     }
   }
 
@@ -788,6 +897,7 @@ export class GameEngine {
 
     window.removeEventListener("resize", this.handleResize);
     this.input.detach();
+    this.audio.destroy();
 
     if (!this.isInitialized) {
       return;
