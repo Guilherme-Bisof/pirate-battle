@@ -1,13 +1,72 @@
 import { useCallback, useState } from "react";
 import { GameCanvas } from "./components/GameCanvas";
-import type{
+import type {
+  GameConfig,
   GameOverResult,
   HudState,
 } from "./game/types/gameConfig";
-
+import { MainMenu } from "./components/screens/MainMenu";
+import { OptionsModal } from "./components/screens/OptionsModal";
 import { DEFAULT_CONFIG } from "./game/types/gameConfig";
 
+const OPTIONS_STORAGE_KEY = "pirate-battle-options";
+
+type SavedOptions = Pick<GameConfig, "sessionDurationSec" | "spawnIntervalSec">;
+
+function loadSavedOptions(): SavedOptions {
+  const defaults: SavedOptions = {
+    sessionDurationSec: DEFAULT_CONFIG.sessionDurationSec,
+    spawnIntervalSec: DEFAULT_CONFIG.spawnIntervalSec,
+  };
+
+  try {
+    const saved = localStorage.getItem(OPTIONS_STORAGE_KEY);
+
+    if (!saved) {
+      return defaults;
+    }
+
+    const parsed: unknown = JSON.parse(saved);
+
+    if (typeof parsed !== "object" || parsed === null) {
+      return defaults;
+    }
+
+    const options = parsed as Partial<SavedOptions>;
+
+    return {
+      sessionDurationSec:
+        typeof options.sessionDurationSec === "number" &&
+        Number.isInteger(options.sessionDurationSec) &&
+        options.sessionDurationSec >= 60 &&
+        options.sessionDurationSec <= 180
+          ? options.sessionDurationSec
+          : defaults.sessionDurationSec,
+
+      spawnIntervalSec:
+        typeof options.spawnIntervalSec === "number" &&
+        options.spawnIntervalSec >= 0.5 &&
+        options.spawnIntervalSec <= 10
+          ? options.spawnIntervalSec
+          : defaults.spawnIntervalSec,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 export default function App() {
+  const [screen, setScreen] = useState<"menu" | "options" | "game">("menu");
+
+  const [config, setConfig] =
+    useState <
+    GameConfig>(() => ({
+      ...DEFAULT_CONFIG,
+      ...loadSavedOptions(),
+    }));
+
+  const [gameSessionId, setGameSessionId] = useState(0);
+
   const [hud, setHud] = useState<HudState>({
     health: DEFAULT_CONFIG.playerMaxHealth,
     maxHealth: DEFAULT_CONFIG.playerMaxHealth,
@@ -24,10 +83,61 @@ export default function App() {
     setGameOverResult(result);
   }, []);
 
-  const handleRestart = () => {
+  function startGame() {
     setGameOverResult(null);
-    window.location.reload();
-  };
+    setIsPaused(false);
+
+    setHud({
+      health: config.playerMaxHealth,
+      maxHealth: config.playerMaxHealth,
+      score: 0,
+      timeLeft: config.sessionDurationSec,
+    });
+
+    setGameSessionId((current) => current + 1);
+    setScreen("game");
+  }
+
+  function returnToMenu() {
+    setGameOverResult(null);
+    setIsPaused(false);
+    setScreen("menu");
+  }
+
+  function saveOptions(options: SavedOptions) {
+    setConfig((current) => ({
+      ...current,
+      ...options,
+    }));
+
+    try {
+      localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(options));
+    } catch {
+      console.error("Unable to save game options.");
+    }
+
+    setScreen("menu");
+  }
+
+  if (screen === "menu") {
+    return (
+      <MainMenu
+        onPlay={startGame}
+        onOptions={() => setScreen("options")}
+      />
+    );
+  }
+
+  if (screen === "options") {
+    return(
+      <OptionsModal
+        sessionDurationSec={config.sessionDurationSec}
+        spawnIntervalSec={config.spawnIntervalSec}
+        onSave={saveOptions}
+        onClose={() => setScreen("menu")}
+      />
+    );
+  }
 
   return (
     <main className="w-screen h-screen relative bg-slate-950 overflow-hidden flex flex-col items-center justify-center">
@@ -74,7 +184,8 @@ export default function App() {
       {/* Canvas PixiJS */}
       <section className="w-full h-full flex items-center justify-center">
         <GameCanvas
-          config={DEFAULT_CONFIG}
+          key={gameSessionId}
+          config={config}
           isPaused={isPaused}
           onGameOver={handleGameOver}
           onHudUpdate={setHud}
@@ -96,10 +207,17 @@ export default function App() {
               </span>
             </p>
             <button
-              onClick={handleRestart}
+              onClick={startGame}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition"
             >
               Play Again
+            </button>
+            <button
+              type="button"
+              onClick={returnToMenu}
+              className="mt-3 w-full rounded-lg border border-slate-600 py-2.5 font-bold text-white hover:bg-slate-800"
+            >
+              Main Menu
             </button>
           </div>
         </section>
