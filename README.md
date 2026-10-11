@@ -2,6 +2,8 @@
 
 A single-player, top-down naval shooter built with React, TypeScript and PixiJS. Sail through an arena of islands, fight Chaser and Shooter enemy ships, and earn points before time runs out or your ship is destroyed.
 
+**Live demo:** https://pirate-battle-psi.vercel.app/
+
 ## Project Overview
 
 Pirate Battle separates the React interface from the PixiJS gameplay engine. React handles menus, configuration, navigation, the HUD, and match results. PixiJS renders the arena and runs the game simulation. Ranking and match history are exposed through typed REST-style APIs mocked by Mock Service Worker (MSW).
@@ -179,15 +181,82 @@ npm run test:e2e
 
 The Playwright configuration runs Chromium in desktop and mobile projects. It starts a local Vite server and configures screenshots, videos and traces to be retained when a test fails.
 
-Open the HTML report after a run:
+The latest recorded local validation completed successfully with:
+
+- ESLint checks passing.
+- Production build completing successfully.
+- **32 Playwright tests passing.**
+- Gameplay, lifecycle and visual-regression coverage, including desktop and mobile screenshot baselines.
+
+These results describe the recorded local run. They do not imply that every requirement in the original challenge has automated coverage or that the deployed application has been independently verified on every device.
+
+Open the HTML report after a test run:
 
 ```bash
 npm run test:e2e:report
 ```
 
-The most recent recorded local validation passed ESLint, the production build and all 14 Playwright test runs. This is the current suite result, not a claim that every requirement in the original challenge has automated coverage.
+## Performance and Delivery Evidence
 
-The full challenge also calls for combat regression tests, deterministic simulation tests, visual baselines, and recovery tests for difficult network conditions. These areas must be assessed separately against the implemented suite.
+Performance measurements were recorded using a production build served through Vite Preview and a visible Chromium browser.
+
+The reproducible benchmark script is located at `scripts/performance.mjs`. It records gameplay frame timings, sampled entity counts and JavaScript heap usage across five start-and-exit cycles.
+
+### Recorded benchmark results
+
+Environment: Windows x64, AMD Ryzen 7 5700X, 16 logical processors, 1280 × 720 viewport, Chromium 156.
+
+| Metric | Recorded result |
+| --- | ---: |
+| Sustained gameplay target | 180 seconds |
+| Observed gameplay duration | 180.21 seconds |
+| Estimated average FPS | 124.2 |
+| Mean frame interval | 8.05 ms |
+| Reported 95th-percentile frame interval (P95) | 7 ms |
+| Frames exceeding 16.67 ms | 115 |
+| Peak sampled enemies | 3 |
+| Peak sampled projectiles | 9 |
+| Peak sampled explosions | 1 |
+| Peak total sampled entities | 12 |
+| Initial JavaScript heap | 4.37 MiB |
+| Final JavaScript heap after five cycles | 8.20 MiB |
+
+The complete reports are available in the repository:
+
+- [`reports/performance-report.md`](reports/performance-report.md)
+- [`reports/performance-report.json`](reports/performance-report.json)
+- [`scripts/performance.mjs`](scripts/performance.mjs)
+
+### Reproducing the benchmark
+
+First generate the production build:
+
+```bash
+npm run build
+```
+
+Start the production preview on the port expected by the script:
+
+```bash
+npm run preview -- --host 127.0.0.1 --port 4173
+```
+
+Keep that terminal running. In a second terminal, execute:
+
+```bash
+node scripts/performance.mjs
+```
+
+The script runs five gameplay start-and-exit cycles followed by a session targeting three minutes. It launches Chromium in visible mode and writes the Markdown and JSON reports to `reports/`.
+
+### Measurement limitations
+
+- The average FPS is estimated from recorded frame intervals.
+- The benchmark activates invulnerability using `?perf=1` to sustain gameplay; enemies and projectiles continue to be simulated.
+- Entity counts are sampled periodically rather than measured on every frame.
+- JavaScript heap measurements do not represent total browser-process or GPU memory.
+- Results depend on hardware, browser version, viewport and system load. They are observations from one environment, not a guarantee of performance on all devices.
+- The reported P95 should be interpreted alongside the mean frame interval and count of frames exceeding 16.67 ms, rather than as a standalone measure.
 
 ## Project Structure
 
@@ -204,6 +273,9 @@ src/
   mocks/                   MSW worker and API handlers
 tests-e2e/
   fixtures/                Playwright end-to-end tests
+reports/                   Performance reports in Markdown and JSON
+scripts/
+  performance.mjs          Performance benchmark script
 public/
   assets/                  Game sprites, UI graphics and sounds
 ```
@@ -212,16 +284,9 @@ public/
 
 **Public demo URL:** https://pirate-battle-psi.vercel.app/
 
+The deployed application must serve the built frontend and the MSW worker so that ranking and match history remain functional without a private backend.
 
-The deployed application must serve the built frontend and the MSW worker so that ranking and match history remain functional without a private backend. Verify the public build by opening it directly, reloading it, completing a match and checking both ranking and history.
-
-## Performance and Delivery Evidence
-
-The challenge requires performance profiling in an optimized build, including FPS, 95th-percentile frame time, entity counts during a three-minute match and memory behaviour over repeated game cycles.
-
-These results must be recorded from actual measurements with the test environment documented. Do not infer performance compliance from a successful production build alone.
-
-The final submission should include `ARCHITECTURE.md`, reproducible test instructions, an HTML test report, profiling evidence and a verified public deployment URL.
+After deployment, verify the public build by opening it directly, reloading it, completing a match and checking both ranking and history. A successful local build alone does not confirm that the deployed application is working correctly.
 
 ## Assets and Licenses
 
