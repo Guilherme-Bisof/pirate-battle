@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "plawright test",
+    "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
