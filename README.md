@@ -210,7 +210,8 @@ public/
 
 ## Deployment
 
-**Public demo URL:** Add the deployed URL here after publishing and verifying the production application.
+**Public demo URL:** https://pirate-battle-psi.vercel.app/
+
 
 The deployed application must serve the built frontend and the MSW worker so that ranking and match history remain functional without a private backend. Verify the public build by opening it directly, reloading it, completing a match and checking both ranking and history.
 
