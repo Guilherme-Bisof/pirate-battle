@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 html, body, #root {
@@ -6,4 +7,17 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
+}
+
+.pirate-menu {
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif;
+}
+.pirate-panel {
+  box-sizing: border-box;
+  border: 26px solid transparent;
+
+  border-image-source: url("/assets/png/default/ui/menu/panel_menu.png");
+  border-image-slice: 8% fill;
+  border-image-width: 26px;
+  border-image-repeat: stretch;
 }

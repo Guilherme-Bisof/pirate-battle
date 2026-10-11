@@ -20,23 +20,31 @@ export function RankingTab({ config, onClose }: RankingTabProps) {
   const totalPages = data?.totalPages ?? 0;
 
   return (
-    <main className="min-h-screen bg-slate-950 p-6 text-white">
-      <section className="mx-auto w-full max-w-4xl">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Ranking</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Scores for the current game configuration
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 hover:bg-slate-800"
+    <main
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-cover bg-center p-2 text-white sm:p-5"
+      style={{
+        backgroundImage: "url('/assets/ui_scene_background.png')",
+      }}
+    >
+      <section
+        className="relative mx-auto flex w-[min(96vw,1320px)] flex-col border-[28px] border-solid border-transparent px-3 py-4 sm:px-8 sm:py-6"
+        style={{
+          borderImage:
+            "url('/assets/png/default/ui/menu/panel_menu.png') 48 fill / 28px / 0 stretch",
+          backgroundColor: "#102331",
+        }}
+      >
+        <div className="mb-5 text-center sm:mb-6">
+          <h1
+            aria-label="Ranking"
+            className="text-2xl font-black tracking-wide text-[#ffe2a0] sm:text-4xl"
           >
-            Main Menu
-          </button>
+            CAPTAIN'S LOG
+          </h1>
+
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-slate-300 sm:text-sm">
+            Scores for the current game configuration
+          </p>
         </div>
 
         {isPending && (
@@ -148,6 +156,16 @@ export function RankingTab({ config, onClose }: RankingTabProps) {
             </div>
           </>
         )}
+
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-12 min-w-48 border-2 border-[#d6a64f] bg-[#173447] px-8 py-3 font-black tracking-widest text-[#ffe2a0] transition hover:bg-[#254b60] active:scale-95"
+          >
+            MAIN MENU
+          </button>
+        </div>
       </section>
     </main>
   );
