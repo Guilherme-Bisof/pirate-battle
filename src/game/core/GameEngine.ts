@@ -1,4 +1,4 @@
-import { Application, Container,  Sprite } from "pixi.js";
+import { Application, Container, Sprite } from "pixi.js";
 import { loadGameAssets } from "./GameAssets";
 import type { GameAssets } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
@@ -43,6 +43,22 @@ interface ExplosionEffect {
   elapsed: number;
 }
 
+type PerformanceStore = {
+  startedAt: number;
+  frameIntervalsMs: number[];
+  entitySamples: Array<{
+    atMs: number;
+    enemies: number;
+    projectiles: number;
+    explosions: number;
+    total: number;
+  }>;
+};
+
+type PerformanceWindow = Window & {
+  __PIRATE_BATTLE_PERF__?: PerformanceStore;
+};
+
 export class GameEngine {
   private app: Application;
   private readonly audio = new GameAudio();
@@ -57,6 +73,10 @@ export class GameEngine {
 
   private isInitialized = false;
   private isDestroyed = false;
+
+  private readonly performanceMonitoringEnabled =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("perf") === "1";
 
   // Dimensões da arena
   public static readonly WORLD_WIDTH = 1280;
@@ -419,11 +439,45 @@ export class GameEngine {
     this.playerGraphics.height = 50;
   }
 
+  private recordPerformanceSample(frameIntervalMs: number): void {
+    if (!this.performanceMonitoringEnabled) return;
+
+    const perfWindow = window as PerformanceWindow;
+    const now = performance.now();
+
+    const store = (perfWindow.__PIRATE_BATTLE_PERF__ ??= {
+      startedAt: now,
+      frameIntervalsMs: [],
+      entitySamples: [],
+    });
+
+    store.frameIntervalsMs.push(frameIntervalMs);
+
+    // Mostra as entidades a cada seis frames.
+    if (store.frameIntervalsMs.length % 6 === 0) {
+      const enemies = this.enemies.length;
+      const projectiles = this.projectiles.length;
+      const explosions = this.explosions.length;
+
+      store.entitySamples.push({
+        atMs: now - store.startedAt,
+        enemies,
+        projectiles,
+        explosions,
+        total: enemies + projectiles + explosions,
+      });
+    }
+  }
+
   private update(): void {
     if (!this.isRunning || this.isPaused) return;
 
     // Delta time em segundos
-    const dt = this.app.ticker.deltaMS / 1000;
+    const frameIntervalMs = this.app.ticker.deltaMS;
+
+    this.recordPerformanceSample(frameIntervalMs);
+
+    const dt = frameIntervalMs / 1000;
 
     // Atualiza o tempo restante
     this.timeLeft -= dt;
@@ -1070,6 +1124,10 @@ export class GameEngine {
   }
 
   private damagePlayer(amount: number): void {
+    if (this.performanceMonitoringEnabled) {
+      return;
+    }
+
     if (!this.isRunning || amount <= 0) {
       return;
     }

@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-10-11T09:40:59.834Z",
+  "environment": {
+    "platform": "Windows_NT 10.0.26200",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "systemMemoryGiB": 15.92,
+    "browserVersion": "156.0.8078.4",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+    "viewport": "1280x720",
+    "devicePixelRatio": 1,
+    "hardwareConcurrency": 16,
+    "deviceMemoryGiB": 16
+  },
+  "build": {
+    "mode": "Vite preview / build de produção",
+    "viewport": "1280x720",
+    "deviceScaleFactor": 1
+  },
+  "memoryCycles": {
+    "baselineHeapBytes": 4579204,
+    "samples": [
+      {
+        "cycle": 1,
+        "heapUsedBytes": 8593339
+      },
+      {
+        "cycle": 2,
+        "heapUsedBytes": 8591995
+      },
+      {
+        "cycle": 3,
+        "heapUsedBytes": 8659688
+      },
+      {
+        "cycle": 4,
+        "heapUsedBytes": 8661704
+      },
+      {
+        "cycle": 5,
+        "heapUsedBytes": 8598511
+      }
+    ],
+    "finalHeapBytes": 8598511,
+    "metricNote": "Heap JavaScript após coleta de lixo via Chromium CDP; não representa a memória total do processo."
+  },
+  "gameplay": {
+    "targetDurationSeconds": 180,
+    "observedWallDurationSeconds": 180.21,
+    "endedBeforeTarget": false,
+    "frameCount": 9599,
+    "averageFps": 124.2,
+    "meanFrameIntervalMs": 8.05,
+    "p95FrameIntervalMs": 7,
+    "framesOver16_67ms": 115,
+    "entitySampleCount": 1599,
+    "maxEnemies": 3,
+    "maxProjectiles": 9,
+    "maxExplosions": 1,
+    "maxTotalEntities": 12,
+    "lastEntitySampleSeconds": 180.24,
+    "measurementNote": "Medição observacional em Chromium; a sessão pode terminar antes de 180 segundos se o jogador perder.",
+    "benchmarkMode": "Invulnerabilidade ativada via ?perf=1 para permitir uma sessão sustentada; inimigos e projéteis continuam simulados."
+  }
+}
